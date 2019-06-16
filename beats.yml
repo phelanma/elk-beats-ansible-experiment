@@ -1,0 +1,154 @@
+---
+- name: Beats for containers
+  hosts: localhost
+  connection: local
+  # roles:
+  #   - {
+  #       role: beats,
+  #       beat: "packetbeat",
+  #       beat_conf: {
+  #         "interfaces": { "device" : "any" },
+  #         "protocols": {
+  #           "dns": {
+  #             "ports": [53],
+  #             "include_authorities": true
+  #           },
+  #           "http": {
+  #             "ports": [...]
+  #           },
+  #           "mongodb":{
+  #             "ports":[27017]
+  #           },
+  #           "thrift": {
+  #             "ports": [...]
+  #           }
+  #         }
+  #       },
+  #       output_conf: {
+  #         "elasticsearch": {
+  #           "hosts": ["localhost:9200"]
+  #         }
+  #       }
+  #     }
+  # vars:
+  #   use_respository: "true"
+
+
+  tasks:
+# TASKS FOR DEV
+    - name: run elasticsearch container
+      tags:
+        - es
+      docker_container:
+        name: "es01"
+        state: started
+        image: docker.elastic.co/elasticsearch/elasticsearch:7.1.1
+        env:
+          discovery.type: single-node
+        published_ports:
+          - 9200:9200
+          - 9300:9300
+        exposed_ports:
+          - "9200"
+          - "9300"
+        volumes:
+          - es_storage:/usr/share/elasticsearch/data
+        networks:
+          - name: network001
+
+    - name: run kibana container
+      tags:
+        - es
+      docker_container:
+        state: started
+        name: "k01"
+        image: docker.elastic.co/kibana/kibana:7.1.1
+        env:
+          ELASTICSEARCH_HOSTS: http://172.18.0.2:9200
+        # xpack.monitoring.collection.enabled
+          published_ports:
+          - 5601:5601
+        exposed_ports:
+          - "5601"
+        networks:
+          - name: network001
+
+    - name: run logstash container
+      tags:
+        - es
+      docker_container:
+        state: started
+        name: "l01"
+        image: docker.elastic.co/logstash/logstash:7.1.1
+        volumes:
+          - ./configs/logstash/config:/usr/share/logstash/config/
+          - ./configs/logstash/pipeline:/usr/share/logstash/pipeline/
+        published_ports:
+          - 5044:5044
+        exposed_ports:
+          - "5044"
+        networks:
+          - name: network001
+
+# ACTUAL TASKS
+    - name: run filebeats container
+      tags:
+       - lg
+      docker_container:
+        name: fbeat
+        image: docker.elastic.co/beats/filebeat:7.1.1
+        volumes:
+          - /var/lib/docker/containers:/usr/share/dockerlogs/data:ro
+          - /var/run/docker.sock:/var/run/docker.sock
+        command: setup
+        env:
+          OUTPUT_LOGSTASH_HOSTS: "['0.0.0.0:5044', '0.0.0.0:5045']"
+          SETUP_KIBANA_HOST: "0.0.0.0:5601"
+        exposed_ports:
+          - "5044"
+        networks:
+          - name: network001
+
+    - name: run packetbeat container
+      tags:
+       - lg
+      docker_container:
+        name: pbeat
+        image: docker.elastic.co/beats/packetbeat:7.1.1
+        # cap_add: NET_ADMIN
+        command: setup
+        env:
+          OUTPUT_LOGSTASH_HOSTS: "['0.0.0.0:5044', '0.0.0.0:5045']"
+          SETUP_KIBANA_HOST: "0.0.0.0:5601"
+        exposed_ports:
+          - "5044"
+        networks:
+          - name: network001
+    - name: run heartbeat container
+      tags:
+       - lg
+      docker_container:
+        name: hbeat
+        image: docker.elastic.co/beats/heartbeat:7.1.1
+        command: setup
+        env:
+          OUTPUT_LOGSTASH_HOSTS: "['0.0.0.0:5044', '0.0.0.0:5045']"
+          SETUP_KIBANA_HOST: "0.0.0.0:5601"
+        exposed_ports:
+          - "5044"
+        networks:
+          - name: network001
+    - name: run metricbeat container
+      tags:
+       - lg
+      docker_container:
+        name: mbeat
+        image: docker.elastic.co/beats/metricbeat:7.1.1
+        command: setup
+        env:
+          OUTPUT_LOGSTASH_HOSTS: "['0.0.0.0:5044', '0.0.0.0:5045']"
+          SETUP_KIBANA_HOST: "0.0.0.0:5601"
+        exposed_ports:
+          - "5044"
+        networks:
+          - name: network001
