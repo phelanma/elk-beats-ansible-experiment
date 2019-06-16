@@ -1,3 +1,7 @@
+https://www.freecodecamp.org/news/docker-container-log-analysis-with-elastic-stack-53d5ec9e5953/
+https://www.docker.elastic.co/
+
+
 pip
 curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 python get-pip.py --user
